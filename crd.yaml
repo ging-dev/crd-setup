@@ -1,0 +1,74 @@
+---
+- name: Setup Chrome Remote Desktop
+  hosts: localhost
+  become: true
+  tasks:
+    - name: Create keyrings directory
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Download Mozilla repo signing key
+      ansible.builtin.get_url:
+        url: https://packages.mozilla.org/apt/repo-signing-key.gpg
+        dest: /etc/apt/keyrings/packages.mozilla.org.asc
+        mode: "0644"
+
+    - name: Add Mozilla repository
+      ansible.builtin.apt_repository:
+        repo: deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main
+        state: present
+        filename: mozilla
+
+    - name: Set Mozilla package priority
+      ansible.builtin.copy:
+        content: |
+          Package: *
+          Pin: origin packages.mozilla.org
+          Pin-Priority: 1000
+        dest: /etc/apt/preferences.d/mozilla
+        mode: "0644"
+
+    - name: Download Chrome Remote Desktop package
+      ansible.builtin.get_url:
+        url: https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb
+        dest: /tmp/chrome-remote-desktop_current_amd64.deb
+        mode: "0644"
+
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+
+    - name: Install required packages
+      ansible.builtin.apt:
+        pkg:
+          - dbus-x11
+          - desktop-base
+          - gnome-session-flashback
+          - nautilus
+          - gnome-terminal
+          - firefox
+        state: present
+
+    - name: Install Chrome Remote Desktop
+      ansible.builtin.apt:
+        deb: /tmp/chrome-remote-desktop_current_amd64.deb
+
+    - name: Configure Chrome Remote Desktop session
+      ansible.builtin.copy:
+        content: |
+          /usr/bin/pulseaudio --start
+          exec /etc/X11/Xsession /usr/libexec/gnome-flashback-metacity
+        dest: /etc/chrome-remote-desktop-session
+        mode: "0644"
+
+    - name: Remove downloaded deb file
+      ansible.builtin.file:
+        path: /tmp/chrome-remote-desktop_current_amd64.deb
+        state: absent
+
+    - name: Start dbus service
+      ansible.builtin.service:
+        name: dbus
+        state: started
